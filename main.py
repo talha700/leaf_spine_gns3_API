@@ -4,7 +4,7 @@ import json
 import jinja2
 import time
 from netmiko import ConnectHandler
-from .constants import (
+from constants import (
                 ipterms,
                 devices,
                 compute_id,
@@ -101,19 +101,52 @@ for ipterm_node in ipterm_nodes:
             result = requests.post(url + "projects/" + project_id + "/links" , data=json.dumps(links))
 
 
-
-
-
+import copy
+ip_range_spine = "192.168.0.1"
+ip_range_leaf = "192.168.0.2"
+index_spine = 0
+index_leaf = 0
 nodes = []
 for node in all_nodes:
     node_id = node['node_id']
     node_name = node['name']
 
-    nodes.append({"name":node_name , "node_id":node_id })
+    slot = 0
+    port = 0
+    interfaces = []
+    if "spine" in node['name']:
+        for interface in range(8):
+            index_spine += 1
+            ip = ip_range_spine.split(".")
+            ip[2] = str(index_spine)
+            ip = ".".join(ip)
+            interfaces.append({"name":f'Ethernet{slot}/{port}',"ip":ip})
+
+            if port >= 3:
+                port = 0
+                slot = 1
+            else:
+                port = port + 1
+
+    if "leaf" in node['name']:
+        dif = 0
+        slot=0
+        port=0
+
+        index_leaf += 1
+        index = copy.copy(index_leaf)
+        for interface in range(4):
+            ip = ip_range_leaf.split(".")
+            ip[2] = str(int(index))
+            ip = ".".join(ip)
+            interfaces.append({"name":f'Ethernet{slot}/{port}',"ip":ip})
+            port += 1
+            index += 8
 
 
+    nodes.append({"name":node_name , "node_id":node_id , "interfaces":interfaces })
 
-# split leafs and spines 
+#split leafs and spines 
 spines = []
 leafes = []
 
@@ -178,7 +211,7 @@ for node in nodes:
     templateEnv = jinja2.Environment(loader=templateLoader)
     TEMPLATE_FILE = "startup-config.jinja2"
     template = templateEnv.get_template(TEMPLATE_FILE)
-    outputText = template.render(ip=network+str(host_ip)) 
+    outputText = template.render(node=node) 
     response = requests.post(url + "projects/" + project_id + "/nodes/" + node["node_id"] + "/files/startup-config.cfg" ,data=outputText)
 
 
